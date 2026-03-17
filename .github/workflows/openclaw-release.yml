@@ -49,10 +49,15 @@ jobs:
           password: ${{ secrets.ALICR_PASSWORD }}
 
       - name: Download Source
-        run: 
+        run: |
           set -euo pipefail
-          TAG="${{ github.event.inputs.openclawTag }}"
-          curl -fsSL "https://github.com/openclaw/openclaw/archive/refs/tags/v${TAG}.tar.gz" \
+          # 根据触发方式获取版本号，手动触发时用户输入不带v，需要自动添加v前缀
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="v${{ github.event.inputs.openclawTag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          curl -fsSL "https://github.com/openclaw/openclaw/archive/refs/tags/${TAG}.tar.gz" \
             | tar -xz -C _src/openclaw --strip-components=1
           mkdir -p _src/openclaw/openclaw
           cp openclaw/Dockerfile openclaw/Caddyfile openclaw/docker-entrypoint.sh _src/openclaw/openclaw/
