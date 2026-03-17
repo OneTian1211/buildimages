@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -eu
 
 mkdir -p /tmp/caddy /data/caddy /config/caddy
