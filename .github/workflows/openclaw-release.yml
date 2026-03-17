@@ -51,9 +51,15 @@ jobs:
       - name: Download Source
         run: |
           set -euo pipefail
-          # 根据触发方式获取版本号，手动触发时用户输入不带v，需要自动添加v前缀
+          # 根据触发方式获取版本号，手动触发时用户输入可能带v或不带v，需要统一处理
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="v${{ github.event.inputs.openclawTag }}"
+            USER_TAG="${{ github.event.inputs.openclawTag }}"
+            # 如果用户输入不带v前缀，自动添加
+            if [[ "$USER_TAG" == v* ]]; then
+              TAG="$USER_TAG"
+            else
+              TAG="v$USER_TAG"
+            fi
           else
             TAG="${GITHUB_REF#refs/tags/}"
           fi
