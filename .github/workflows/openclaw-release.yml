@@ -51,10 +51,13 @@ jobs:
       - name: Download Source
         run: |
           set -euo pipefail
-          # 根据触发方式获取版本号，手动触发时用户输入可能带v或不带v，需要统一处理
+          # 清理并创建目录
+          rm -rf _src/openclaw
+          mkdir -p _src/openclaw
+          # 根据触发方式获取版本号，手动触发时用户输入可能带 v 或不带 v，需要统一处理
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             USER_TAG="${{ github.event.inputs.openclawTag }}"
-            # 如果用户输入不带v前缀，自动添加
+            # 如果用户输入不带 v 前缀，自动添加
             if [[ "$USER_TAG" == v* ]]; then
               TAG="$USER_TAG"
             else
