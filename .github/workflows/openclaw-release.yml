@@ -10,18 +10,21 @@ on:
         default: "2026.3.13"
         description: "OpenClaw Release Tag 2026.3.13, etc."
         required: true
-      dockerhubTag:
-        default: "2026.3.13"
-        description: "Docker Hub Tag"
+      aliyunTag:
+        default: ""
+        description: "Aliyun Image Tag (empty = same as openclawTag)"
         required: false
       platforms:
         description: "Platforms"
         default: "linux/amd64,linux/arm64/v8"
         required: true
       pushLatest:
-        description: "Push latest tag"
+        description: "Push latest tag to Aliyun"
         default: "true"
         required: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # ✅ 过渡期兼容 Node.js 24
 
 jobs:
   docker:
@@ -30,54 +33,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # ✅ 升级到 v4，修复 Node.js 20 警告
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+      # 🔐 登录阿里云 ACR（替换原 Docker Hub 登录）
+      - name: Login to Aliyun Container Registry
+        uses: docker/login-action@v4
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          registry: ${{ secrets.ALICR_REGISTRY }}
+          username: ${{ secrets.ALICR_USERNAME }}
+          password: ${{ secrets.ALICR_PASSWORD }}
 
       - name: Download Source
-        run: |
+        run: 
           set -euo pipefail
-          mkdir -p _src/openclaw
-          curl -fsSL "https://github.com/openclaw/openclaw/archive/refs/tags/v${{ github.event.inputs.openclawTag }}.tar.gz" \
+          TAG="${{ github.event.inputs.openclawTag }}"
+          curl -fsSL "https://github.com/openclaw/openclaw/archive/refs/tags/v${TAG}.tar.gz" \
             | tar -xz -C _src/openclaw --strip-components=1
           mkdir -p _src/openclaw/openclaw
           cp openclaw/Dockerfile openclaw/Caddyfile openclaw/docker-entrypoint.sh _src/openclaw/openclaw/
 
+      # 🏗️ 构建并推送阿里云镜像
       - name: Build OpenClaw Image and Push
         uses: docker/build-push-action@v6
         with:
           context: _src/openclaw
           file: _src/openclaw/openclaw/Dockerfile
-          platforms: ${{ github.event.inputs.platforms || 'linux/amd64,linux/arm64/v8' }}
+          platforms: ${{ github.event.inputs.platforms }}
           push: true
           build-args: |
             OPENCLAW_INSTALL_BROWSER=true
             OPENCLAW_VERSION=${{ github.event.inputs.openclawTag }}
           tags: |
-            1panel/openclaw:${{ github.event.inputs.dockerhubTag || github.event.inputs.openclawTag }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Push Latest Tag
-        if: ${{ github.event_name == 'push' || github.event.inputs.pushLatest == 'true' }}
-        uses: docker/build-push-action@v6
-        with:
-          context: _src/openclaw
-          file: _src/openclaw/openclaw/Dockerfile
-          platforms: ${{ github.event.inputs.platforms || 'linux/amd64,linux/arm64/v8' }}
-          push: true
-          build-args: |
-            OPENCLAW_INSTALL_BROWSER=true
-            OPENCLAW_VERSION=${{ github.event.inputs.openclawTag }}
-          tags: |
-            1panel/openclaw:latest
+            ${{ secrets.ALICR_REGISTRY }}/${{ secrets.ALICR_NAMESPACE }}/openclaw:${{ github.event.inputs.aliyunTag != '' && github.event.inputs.aliyunTag || github.event.inputs.openclawTag }}
+            ${{ github.event.inputs.pushLatest == 'true' && format('{0}/{1}/openclaw:latest', secrets.ALICR_REGISTRY, secrets.ALICR_NAMESPACE) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
